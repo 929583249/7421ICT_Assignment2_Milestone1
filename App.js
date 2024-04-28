@@ -11,6 +11,8 @@ import {
   Image
 } from 'react-native';
 import SplashScreen from './components/SplashScreen'; // 导入 SplashScreen 组件
+import { ScrollView } from 'react-native';
+
 
 export default function App() {
   const [loading, setLoading] = useState(true);
@@ -21,6 +23,17 @@ export default function App() {
     setSelectedCategory(null);
     setProducts(null);
   };
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const Header = ({ title, isLoading }) => (
+    <View style={styles.headerContainer}>
+      {isLoading ? (
+        <ActivityIndicator size="large" color="#FFFFFF" />
+      ) : (
+        <Text style={styles.headerTitle}>{title}</Text>
+      )}
+    </View>
+  );
+
 
   useEffect(() => {
     // SplashScreen 延迟
@@ -33,22 +46,37 @@ export default function App() {
   }, []);
 
   const fetchCategories = async () => {
+    setLoading(true); // 在获取分类时开始显示加载状态
     try {
       const response = await fetch('https://fakestoreapi.com/products/categories');
       const data = await response.json();
       setCategories(data);
     } catch (error) {
       console.error('Fetching categories failed:', error);
+    } finally {
+      setLoading(false); // 无论获取成功与否，都结束加载状态
     }
   };
-
+  const getPageTitle = () => {
+    if (selectedCategory && !selectedProduct) {
+      return selectedCategory;
+    } else if (selectedProduct) {
+      return 'Product Details';
+    } else {
+      return 'Fake Store';
+    }
+  };
   const fetchProductsForCategory = async (category) => {
+    setLoading(true); // 在获取产品时开始显示加载状态
     try {
       const response = await fetch(`https://fakestoreapi.com/products/category/${category}`);
       const data = await response.json();
       setProducts(data);
+      setSelectedCategory(category);
     } catch (error) {
       console.error('Fetching products failed:', error);
+    } finally {
+      setLoading(false); // 无论获取成功与否，都结束加载状态
     }
   };
 
@@ -65,58 +93,97 @@ export default function App() {
   );
 
   const renderProduct = ({ item }) => (
-    <View style={styles.productItem}>
-      <Image source={{ uri: item.image }} style={styles.productImage} />
-      <Text style={styles.productTitle}>{item.title}</Text>
-      <Text style={styles.productPrice}>Price: {item.price}</Text>
-    </View>
+    <TouchableOpacity
+      style={styles.productItem}
+      onPress={() => fetchProductDetails(item.id)}
+    >
+      <View style={styles.productItem}>
+        <Image source={{ uri: item.image }} style={styles.productImage} />
+        <Text style={styles.productTitle}>{item.title}</Text>
+        <Text style={styles.productPrice}>Price: {item.price}</Text>
+      </View>
+    </TouchableOpacity>
   );
-
+  
   const renderContent = () => {
-    if (loading) {
-      return <SplashScreen />;
-    } else if (selectedCategory && products) {
-      return (
-        <>
-          {/* 返回按钮 */}
-          <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
-            <Text style={styles.backButtonText}>Back</Text>
-          </TouchableOpacity>
+    let pageTitle = getPageTitle();
+    return (
+      <View style={{ flex: 1 }}>
+        {/* 传递 loading 状态给 Header 组件 */}
+        <Header title={pageTitle} isLoading={loading} />
+        {loading && !selectedCategory && !selectedProduct ? (
+          <SplashScreen />
+        ) : selectedProduct ? (
+          renderProductDetails()
+        ) : selectedCategory && products ? (
+          renderProductList()
+        ) : categories ? (
           <FlatList
-            data={products}
-            renderItem={renderProduct}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={styles.productList}
+            data={categories}
+            renderItem={renderCategory}
+            keyExtractor={(item) => item}
+            contentContainerStyle={styles.content}
           />
-        </>
-      );
-    } else if (!categories) {
-      return <ActivityIndicator size="large" color="#0000ff" />;
-    } else {
-      return (
-        <FlatList
-          data={categories}
-          renderItem={renderCategory}
-          keyExtractor={(item) => item}
-          contentContainerStyle={styles.content}
-        />
-      );
-    }
+        ) : (
+          <ActivityIndicator size="large" color="#0000ff" />
+        )}
+      </View>
+    );
   };
+  
+  
+  
   const renderProductList = () => {
     return (
-      <>
+      <View style={styles.productListContainer}>
         <FlatList
           data={products}
           renderItem={renderProduct}
           keyExtractor={(item) => item.id.toString()}
-          contentContainerStyle={styles.productList}
+          style={styles.productList}
         />
-        {/* 返回按钮 */}
-        <TouchableOpacity onPress={handleBackToHome} style={styles.backButton}>
+        {/* 固定在底部的返回按钮 */}
+        <TouchableOpacity onPress={handleBackToHome} style={styles.fixedBottomButton}>
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
-      </>
+      </View>
+    );
+  };
+  const fetchProductDetails = async (productId) => {
+    setLoading(true); // 在获取产品详情时开始显示加载状态
+    try {
+      const response = await fetch(`https://fakestoreapi.com/products/${productId}`);
+      const data = await response.json();
+      setSelectedProduct(data);
+    } catch (error) {
+      console.error('Fetching product details failed:', error);
+    } finally {
+      setLoading(false); // 无论获取成功与否，都结束加载状态
+    }
+  };
+  
+  
+  const renderProductDetails = () => {
+    if (!selectedProduct) {
+      return <ActivityIndicator size="large" color="#0000ff" />;
+    }
+    return (
+      <View style={styles.productDetailsContainer}>
+        <ScrollView contentContainerStyle={styles.scrollViewContent}>
+          <Image source={{ uri: selectedProduct.image }} style={styles.productDetailImage} />
+          <Text style={styles.productDetailTitle}>{selectedProduct.title}</Text>
+          <Text style={styles.productDetailPrice}>Price: {selectedProduct.price}</Text>
+          <Text style={styles.productDetailDescription}>{selectedProduct.description}</Text>
+          {/* 添加到购物车按钮 */}
+          <TouchableOpacity style={styles.addToCartButton}>
+            <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+          </TouchableOpacity>
+        </ScrollView>
+        {/* 返回按钮 */}
+        <TouchableOpacity onPress={() => setSelectedProduct(null)} style={styles.fixedBackButton}>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+      </View>
     );
   };
   return (
@@ -203,19 +270,110 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#E44D26',
   },
+  // backButton: {
+  //   position: 'absolute',
+  //   bottom: 20, // 距离底部20单位
+  //   alignSelf: 'center', // 按钮水平居中
+  //   padding: 10,
+  //   backgroundColor: '#f0f0f0', // 按钮背景色
+  //   borderWidth: 1,
+  //   borderColor: '#000',
+  //   borderRadius: 20, // 圆角
+  //   zIndex: 10, // 确保按钮在最上层
+  // },
   backButton: {
-    position: 'absolute',
-    bottom: 20, // 距离底部20单位
-    alignSelf: 'center', // 按钮水平居中
+    // 不再需要绝对定位
     padding: 10,
     backgroundColor: '#f0f0f0', // 按钮背景色
     borderWidth: 1,
     borderColor: '#000',
     borderRadius: 20, // 圆角
-    zIndex: 10, // 确保按钮在最上层
   },
   backButtonText: {
     fontSize: 18,
     color: '#000',
+  },
+  productDetails: {
+    // 产品详情内容的样式
+    alignItems: 'center',
+    marginTop: 50, // 或更根据你的设计调整
+  },
+  productDetailImage: {
+    width: '100%',
+    height: 200,
+    resizeMode: 'contain',
+  },
+  productDetailTitle: {
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginVertical: 10,
+  },
+  productDetailPrice: {
+    fontSize: 18,
+    color: '#E44D26',
+  },
+  productDetailDescription: {
+    textAlign: 'center',
+  },
+  productDetailButtons: {
+    flexDirection: 'row',
+    marginTop: 20,
+  },
+  addToCartButton: {
+    // 添加到购物车按钮样式
+    backgroundColor: 'blue',
+    padding: 10,
+    borderRadius: 5,
+    marginHorizontal: 10,
+  },
+  addToCartButtonText: {
+    color: '#fff',
+  },
+  productDetailsContainer: {
+    flex: 1,
+     // 使内容和按钮分布在上下两端
+  },
+  scrollViewContent: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  fixedBackButton: {
+    padding: 10,
+    backgroundColor: '#f0f0f0', // 按钮背景色
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 20, // 圆角
+    position: 'absolute', // 使用绝对定位将按钮放在底部
+    bottom: 20, // 距离底部的位置
+    alignSelf: 'center', // 在底部居中
+    zIndex: 10, // 确保按钮在最上层
+  },
+  productListContainer: {
+    flex: 1,
+    justifyContent: 'space-between', // 用来确保内容和按钮位于容器的两端
+  },
+  productList: {
+    marginTop: 50,
+  },
+  fixedBottomButton: {
+    padding: 10,
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#000',
+    borderRadius: 20,
+    position: 'absolute', // 绝对定位
+    bottom: 20, // 底部间距20
+    alignSelf: 'center', // 水平居中
+    zIndex: 10, // 确保按钮在最上层
+  },
+  headerContainer: {
+    height: 100, // 根据需要调整高度
+    backgroundColor: 'navy', // 标题栏背景颜色
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    color: 'white', // 标题文字颜色
+    fontSize: 20, // 标题文字大小
   },
 });
